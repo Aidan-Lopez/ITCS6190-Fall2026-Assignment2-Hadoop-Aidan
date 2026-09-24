@@ -1,6 +1,13 @@
 package com.example;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Reducer;
@@ -25,16 +32,57 @@ import org.apache.hadoop.mapreduce.Reducer;
  *       reduce() only stores each document, and the pairwise comparison happens in
  *       cleanup(), which Hadoop calls once after the last reduce() call.
  */
+
+
 public class DocumentSimilarityReducer extends Reducer<Text, Text, Text, Text> {
+
+    private Map<String, Set<String>> documents =
+            new HashMap<String, Set<String>>();
 
     @Override
     protected void reduce(Text key, Iterable<Text> values, Context context)
             throws IOException, InterruptedException {
-        // TODO
+
+        Set<String> words = new HashSet<String>();
+
+        for (Text value : values) {
+            String[] tokens = value.toString().split("\\s+");
+
+            for (String token : tokens) {
+                if (!token.isEmpty()) {
+                    words.add(token);
+                }
+            }
+        }
+
+        documents.put(key.toString(), words);
     }
 
     @Override
-    protected void cleanup(Context context) throws IOException, InterruptedException {
-        // TODO (only needed if your design compares documents here)
+    protected void cleanup(Context context)
+            throws IOException, InterruptedException {
+
+        List<String> ids = new ArrayList<String>(documents.keySet());
+        Collections.sort(ids);
+
+        for (int i = 0; i < ids.size(); i++) {
+            for (int j = i + 1; j < ids.size(); j++) {
+
+                Set<String> a = documents.get(ids.get(i));
+                Set<String> b = documents.get(ids.get(j));
+
+                Set<String> intersection = new HashSet<String>(a);
+                intersection.retainAll(b);
+
+                if (!intersection.isEmpty()) {
+                    int union = a.size() + b.size() - intersection.size();
+
+                    double similarity = (double) intersection.size() / union;
+
+
+                    context.write(new Text(ids.get(i) + ", " + ids.get(j)), new Text("Similarity: " + String.format(java.util.Locale.US, "%.2f", similarity)));
+                }
+            }
+        }
     }
 }
